@@ -10,4 +10,4 @@ spec:
   script:
     configMap:
       name: k6-test
-      file: first_Script.js
+      file: k6_testRun_CRD.js
