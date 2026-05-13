@@ -23,7 +23,7 @@ export const options={
 
 
 export default function () {
-     const res = http.get('https://test.k6.io');
+     const res = http.get('https://quickpizza.grafana.com/test.k6.io/');
 
      check(res,{
         'status is 200': (r) => r.status == 200
