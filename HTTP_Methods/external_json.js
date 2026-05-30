@@ -1,5 +1,5 @@
 import http from 'k6/http';
-import { check } from 'k6';
+import { check, sleep} from 'k6';
 import { SharedArray } from 'k6/data';
 import { randomItem } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
 
@@ -7,6 +7,18 @@ const userCredentials = new SharedArray('user with credentials', function () {
     return JSON.parse(open('../users.json'));
 });
 
+
+
+export const options = {
+    vus: 10,
+    duration: '30s',
+
+    thresholds: {
+        http_req_duration: ['p(95)<500'],
+        checks: ['rate>0.95'],
+        http_req_failed: ['rate<0.02']
+     }
+}
 
 
 export default function () {
@@ -45,6 +57,7 @@ export default function () {
             headers: { 'Content-Type': 'application/json' }
         }
     )
+    sleep(1);
 
     check(res, {
         'is status 201': (r) => r.status === 201,
