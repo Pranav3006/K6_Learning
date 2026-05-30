@@ -5,25 +5,29 @@ import { randomItem } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
 
 export const options = {
     stages: [
-        { duration: '120s', target: 50 },
-        { duration: '15m', target: 50 },
-        { duration: '120s', target: 0 }
+        { duration: '30s', target: 5 },
+        { duration: '2m', target: 5 },
+        { duration: '30s', target: 0 }
     ],
 
     thresholds: {
         http_req_duration: ['p(95)<500'],
         checks: ['rate>0.95'],
         http_req_failed: ['rate<0.02']
+    },
+
+    cloud: {
+        projectID:7689032
     }
 };
 
 
 const bookData = new SharedArray('book with details', function () {
-    return JSON.parse(open('../books_5k.json'));
+    return JSON.parse(open('./books_5k.json'));
 });
 
 const userCredentials = new SharedArray('user with credentials', function () {
-    return JSON.parse(open('../users.json'));
+    return JSON.parse(open('./users.json'));
 });
 
 export default function () {
@@ -31,9 +35,10 @@ export default function () {
     const randomBook = randomItem(bookData);
     const randomUser = randomItem(userCredentials);
 
+    const BaseURL = 'https://k6-bookstore-api.onrender.com';
 
     let res = http.post(
-        'http://localhost:8000/auth/login',
+        `${BaseURL}/auth/login`,
         JSON.stringify({
             "username": randomUser.username,
             "password": randomUser.password
@@ -47,7 +52,7 @@ export default function () {
 
 
     const book_id = http.post(
-        'http://localhost:8000/books',
+        `${BaseURL}/books`,
         JSON.stringify({
             title: randomBook.title,
             author: randomBook.author,
@@ -60,14 +65,15 @@ export default function () {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${access_token}`
-            }
+            },
+            tags: { name: 'Create Book' }
         }
     ).json().id;
 
-    const resp = http.get(`http://localhost:8000/books/${book_id}`)
+    const resp = http.get(`${BaseURL}/books/${book_id}`)
 
     http.put(
-        'http://localhost:8000/books',
+        `${BaseURL}/books/${book_id}`,
         JSON.stringify({
             title: randomBook.title,
             author: randomBook.author,
@@ -80,15 +86,18 @@ export default function () {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${access_token}`
-            }
+            },
+            tags: { name: 'Update Book' }
         }
+        
     )
 
-    http.del(`http://localhost:8000/books/${book_id}`,
+    http.del(`${BaseURL}/books/${book_id}`,
         null, {
         headers: {
             'Authorization': `Bearer ${access_token}`
-        }
+        },
+        tags: { name: 'Delete Book' }
     })
 
     check(res, {

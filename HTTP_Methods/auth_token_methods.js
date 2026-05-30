@@ -4,6 +4,8 @@ import { check } from 'k6';
 
 export default function () {
 
+    // BaseURL = 'https://k6-bookstore-api.onrender.com/';
+
     let res = http.post(
         'http://localhost:8000/auth/login',
         JSON.stringify({

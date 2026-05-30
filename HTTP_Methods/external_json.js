@@ -46,8 +46,10 @@ export default function () {
     // )
     // });
 
+    const BaseURL = 'https://k6-bookstore-api.onrender.com';
+
     const res = http.post(
-        'http://localhost:8000/auth/register',
+        `${BaseURL}/auth/register`,
         JSON.stringify({
             username: randomCredentials.username,
             password: randomCredentials.password,
