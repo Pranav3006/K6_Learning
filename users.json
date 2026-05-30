@@ -1,0 +1,7 @@
+[
+  { "username": "shyam",   "password": "shyam123",   "email": "shyam@k6.io"   },
+  { "username": "harry",   "password": "harry1234",  "email": "harry@k6.io"   },
+  { "username": "kemi",   "password": "kemi123",   "email": "kemi@k6.io"   },
+  { "username": "isha",    "password": "isha1234",   "email": "isha@k6.io"    },
+  { "username": "sanjay",    "password": "sanjay12345",  "email": "sanjay@k6.io"    }
+]
