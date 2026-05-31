@@ -10,11 +10,15 @@ const userCredentials = new SharedArray('user with credentials', function () {
 
 
 export const options = {
-    vus: 10,
-    duration: '30s',
+
+    stages: [
+        { duration: '10s', target: 5 },
+        { duration: '1m', target: 5 },
+        { duration: '10s', target: 0 }
+    ],
 
     thresholds: {
-        http_req_duration: ['p(95)<500'],
+        http_req_duration: ['p(95)<100'],
         checks: ['rate>0.95'],
         http_req_failed: ['rate<0.02']
      }

@@ -5,9 +5,10 @@ import { check } from 'k6';
 export default function () {
 
     // BaseURL = 'https://k6-bookstore-api.onrender.com/';
+    const BaseURL = 'https://k6-bookstore-api.onrender.com';
 
     let res = http.post(
-        'http://localhost:8000/auth/login',
+        `${BaseURL}/auth/login`,
         JSON.stringify({
             "username": "alice",
             "password": "alice123"
@@ -20,7 +21,7 @@ export default function () {
     const access_token = res.json().access_token;
 
     const book_id = http.post(
-        'http://localhost:8000/books',
+        `${BaseURL}/books`,
         JSON.stringify({
             "title": "Death Note",
             "author": "Prakhar",
@@ -37,7 +38,7 @@ export default function () {
         }
     ).json().id;
 
-    res = http.get(`http://localhost:8000/books/${book_id}`)
+    res = http.get(`${BaseURL}/books/${book_id}`)
 
     check(res,{
         'status is 200': (r) => r.status === 200,
@@ -45,7 +46,7 @@ export default function () {
     })
 
     http.put(
-        'http://localhost:8000/books',
+        `${BaseURL}/books/${book_id}`,
         JSON.stringify({
             "title": "Death Note",
             "author": "Prakhar",
@@ -62,12 +63,12 @@ export default function () {
         }
     )
 
-    http.del(`http://localhost:8000/books/${book_id}`,
+    http.del(`${BaseURL}/books/${book_id}`,
         null,{
         headers: {
             'Authorization': `Bearer ${access_token}`
         }
     })
 
-    http.get(`http://localhost:8000/books/${book_id}`)
+    http.get(`${BaseURL}/books/${book_id}`)
 }
