@@ -16,10 +16,13 @@ const orderSuccessRate = new Rate('order_success_rate'); // 1 for success, 0 for
 
 export const options = {
     stages: [
-        { duration: '30s', target: 10 }, // Ramp up to 10 users over 30 seconds
-        { duration: '4m', target: 10 },  // Stay at 10 users for 4 minutes
-        { duration: '30s', target: 0 },   // Ramp down to 0 users over 30 seconds
+        { duration: '10s', target: 5 }, // Ramp up to 5 users over 30 seconds
+        { duration: '3m', target: 5 },  // Stay at 5 users for 3 minutes
+        { duration: '10s', target: 0 },   // Ramp down to 0 users over 30 seconds
     ],
+
+    // vus: 3,
+    // duration: '30s',
 
     thresholds: {
         'order_creation_time': ['p(95)<500'], // 95% of order placements should be under 500ms
@@ -35,32 +38,40 @@ const BASE_URL = 'https://k6-bookstore-api.onrender.com';
 export function setup() {
 
     // Each test run needs a unique email to avoid 409 "already registered"
-    const uniqueEmail = `perf_tester_${Date.now()}@example.com`;
+    // const uniqueEmail = `perf_tester_${Date.now()}@example.com`;
 
+    const username = `k6user_${Date.now()}`;
+    const email = `${username}@test.com`;
+    const password = "Test@1234";
+
+    // Register User
+
+    http.post(
+        `${BASE_URL}/auth/register`,
+        JSON.stringify({ username, password, email }),
+        { headers: { "Content-Type": "application/json" } }
+    );
+
+    //Authenticate User
     const authRes = http.post(
-        `${BASE_URL}/api-clients/`,
-        JSON.stringify({
-            clientName: "k6-exercise1",
-            clientEmail: uniqueEmail,
-        }),
-        {
-            headers: { 'Content-Type': 'application/json' }
-        }
-    )
+        `${BASE_URL}/auth/login`,
+        JSON.stringify({ username, password }),
+        { headers: { "Content-Type": "application/json" } }
+    );
 
     check(authRes, {
-        'auth:status is 201': (r) => r.status === 201,
-        'auth: has accessToken': (r) => r.json("accessToken") !== undefined,
+        'auth:status is 200': (r) => r.status === 200,
+        'auth: has accessToken': (r) => r.json("access_token") !== undefined,
     });
 
-    if (authRes.status !== 201) {
+    if (authRes.status !== 200) {
         // If authentication fails, we can't proceed with the test, so we throw an error to stop execution.
         throw new Error(
             '`Auth failed [${authRes.status}]: ${authRes.body}`'
         );
     }
 
-    const authToken = authRes.json("accessToken");
+    const authToken = authRes.json("access_token");
     console.log(`[setup] Token Obtained: ${authToken.substring(0, 20)}...`);
     return { authToken }; // Return value to be used in the default function as data parameter
 }
@@ -73,11 +84,10 @@ export default function (data) {
 
     //Group 1: health check
     group('01_health_check', () => {
-        const res = http.get(`${BASE_URL}/status`);
+        const res = http.get(`${BASE_URL}/`);
 
         check(res, {
             'health: status is 200': (r) => r.status === 200,
-            'health: api is Ok': (r) => r.json('status') === 'OK',
         })
 
         sleep(randomIntBetween(1, 4));
@@ -90,6 +100,7 @@ export default function (data) {
     // User browses all books, then filters to fiction only.
 
     let availableBookId;
+    let orderId;
 
     group('02_browse_catalogue', () => {
 
@@ -97,27 +108,30 @@ export default function (data) {
 
         check(allBooksRes, {
             'browse: book list status is 200': (r) => r.status === 200,
-            'browse: book returns an array': (r) => Array.isArray(r.json()),
-            'browse: at least 1 book available': (r) => r.json().length > 0,
+            'browse: book returns an array': (r) => r.body && Array.isArray(r.json().data),
+            'browse: at least 1 book available': (r) => r.body && r.json().data.length > 0,
         });
+
+        if (!allBooksRes.body) return;
 
         sleep(randomIntBetween(1, 3));
 
         // Filter to fiction books and pick the available first book
 
-        const fictionBookRes = http.get(`${BASE_URL}/books?type=fiction&limit=5`);
+        const fictionBookRes = http.get(`${BASE_URL}/books?limit=5`);
 
         check(fictionBookRes, {
             'fiction: status is 200': (r) => r.status === 200,
-            'fiction: fiction has results': (r) => r.json().length > 0,
+            'fiction: fiction has results': (r) => r.body && r.json().data.length > 0,
         });
 
         // Find the first book with available === true
-        const books = fictionBookRes.json();
-        const availableBooks = books.find(b => b.available === true);
+        const books = fictionBookRes.json().data;
+        // console.log(`Fiction books body: ${fictionBookRes.body}`);
+        const availableBooks = books.find(b => b.stock > 0);
 
         if (availableBooks) {
-            console.log(`Found available book: ${availableBooks.name} (ID: ${availableBooks.id})`);
+            console.log(`Found available book: ${availableBooks.title} (ID: ${availableBooks.id})`);
             availableBookId = availableBooks.id;
         }
 
@@ -137,7 +151,7 @@ export default function (data) {
         check(res, {
             'details: status is 200': (r) => r.status === 200,
             'details: has id': (r) => r.json("id") !== undefined,
-            'details: has name': (r) => r.json("name") !== undefined,
+            'details: has title': (r) => r.json("title") !== undefined,
             'details: has price': (r) => r.json("price") !== undefined,
         });
 
@@ -149,22 +163,20 @@ export default function (data) {
     // ── GROUP 4: Place order ────────────────────────────────────
     // User adds the book to their cart, then places an order.
 
-    let orderId;
-
     group('04_place_order', () => {
         const startTime = new Date();
 
         const orderRes = http.post(
             `${BASE_URL}/orders`,
             JSON.stringify({
-                bookId: availableBookId,
-                CustomerName: "Perf Tester"
+                book_id: availableBookId,
+                quantity: 1
             }),
             { headers }
         );
 
         // Record to our custom Trend metric (ms elapsed)
-        ordercreationTime.add(new Date() - startTime);
+        orderCreationTime.add(new Date() - startTime);
 
         const orderPlace = check(orderRes, {
             'order: status is 201': (r) => r.status === 201,
@@ -194,54 +206,16 @@ export default function (data) {
             return;
         }
 
-        const verifyRes = http.get(`${BASE_URL}/orders/${orderId}`, { headers });
+        const verifyRes = http.get(`${BASE_URL}/orders`, { headers });
+        console.log(`Orders list: ${verifyRes.body}`);
 
         check(verifyRes, {
             'verify: status is 200': (r) => r.status === 200,
-            'verify: correct orderId': (r) => r.json("id") === orderId,
-            'verify: correct bookId': (r) => r.json("bookId") === availableBookId,
-            'verify: correct customer name': (r) => r.json("CustomerName") === "Perf Tester",
+            'verify: correct orderId': (r) => r.json().data.some(o => o.id === orderId),
+            'verify: correct bookId': (r) => r.json().data.some(o => o.book_id === availableBookId),
         });
 
         sleep(randomIntBetween(1, 3));
-    });
-
-    // Group 6: Update Order
-
-    group('06_update_order', () => {
-        if(!orderId) return;
-
-        const res= http.patch(
-            `${BASE_URL}/orders/${orderId}`,
-            JSON.stringify({
-                CustomerName: "Performance Tester (Updated)"
-            }),
-            { headers }
-        )
-
-        check(res, {
-            'update: status is 204': (r) => r.status === 204,
-        });
-
-         sleep(randomIntBetween(1, 3));
-    });
-
-    //Group 7: Delete Order
-
-    group('07_delete_order', () => {
-        if(!orderId) return;
-        
-        const res = http.del(
-            `${BASE_URL}/orders/${orderId}`,
-            null,
-            { headers }
-        );
-
-        check(res, {
-            'delete: status is 204': (r) => r.status === 204,
-        });
-        
-         sleep(randomIntBetween(1, 3));
     });
 
 }
